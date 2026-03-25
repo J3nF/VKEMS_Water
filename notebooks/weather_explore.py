@@ -74,10 +74,11 @@ else:
 
 print("\nHourly data\n", hourly_dataframe)
 
-# Resample to weekly maximums
+# Resample to weekly maximums and minimums
 hourly_dataframe.set_index('date', inplace=True)
-weekly_dataframe = hourly_dataframe.resample('W').max()
-print("\nWeekly maximum data\n", weekly_dataframe)
+weekly_dataframe = hourly_dataframe.resample('W').agg(['max', 'min'])
+weekly_dataframe.columns = [f"{col}_{stat}" for col, stat in weekly_dataframe.columns]
+print("\nWeekly maximum/minimum data\n", weekly_dataframe)
 
 ##################
 # Now merge the leakage data in
@@ -94,4 +95,4 @@ df_transposed = df_transposed.iloc[1:].reset_index(drop=True)
 # eventually this should be changed to have the zone names be the headers
 # use different number for different zone
 weekly_dataframe["water_leakage"] = df_transposed[1].values
-weekly_dataframe.to_csv('full_weekly_data.csv', index=True)
+weekly_dataframe.to_csv('data\\weekly_min_max.csv', index=True)
