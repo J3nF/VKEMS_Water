@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 # File to save/load data
 csv_file = 'weather_data.csv'
 
-if os.path.exists(csv_file):
+if 0==1: #os.path.exists(csv_file):
     # Load data from CSV
     hourly_dataframe = pd.read_csv(csv_file, parse_dates=['date'])
     print("Data loaded from CSV.")
@@ -37,7 +37,7 @@ else:
     	"longitude": 0.77565183,
     	"start_date": "2001-12-24",
     	"end_date": "2026-02-22",
-    	"hourly": ["temperature_2m", "soil_temperature_100_to_255cm", "soil_moisture_100_to_255cm", "precipitation"],
+    	"hourly": ["temperature_2m", "soil_temperature_28_to_100cm", "soil_moisture_28_to_100cm", "precipitation"],
     }
     responses = openmeteo.weather_api(url, params = params)
 
@@ -50,8 +50,8 @@ else:
     # Process hourly data. The order of variables needs to be the same as requested.
     hourly = response.Hourly()
     hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
-    hourly_soil_temperature_100_to_255cm = hourly.Variables(1).ValuesAsNumpy()
-    hourly_soil_moisture_100_to_255cm = hourly.Variables(2).ValuesAsNumpy()
+    hourly_soil_temperature_28_to_100cm = hourly.Variables(1).ValuesAsNumpy()
+    hourly_soil_moisture_28_to_100cm = hourly.Variables(2).ValuesAsNumpy()
     hourly_precipitation = hourly.Variables(3).ValuesAsNumpy()
 
     hourly_data = {"date": pd.date_range(
@@ -62,8 +62,8 @@ else:
     )}
 
     hourly_data["temperature_2m"] = hourly_temperature_2m
-    hourly_data["soil_temperature_100_to_255cm"] = hourly_soil_temperature_100_to_255cm
-    hourly_data["soil_moisture_100_to_255cm"] = hourly_soil_moisture_100_to_255cm
+    hourly_data["soil_temperature_28_to_100cm"] = hourly_soil_temperature_28_to_100cm
+    hourly_data["soil_moisture_28_to_100cm"] = hourly_soil_moisture_28_to_100cm
     hourly_data["precipitation"] = hourly_precipitation
 
     hourly_dataframe = pd.DataFrame(data = hourly_data)
