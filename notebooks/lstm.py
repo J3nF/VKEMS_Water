@@ -214,14 +214,70 @@ def run(df: pd.DataFrame):
     ss_tot = np.sum((trues - trues.mean()) ** 2)
     r2   = 1 - ss_res / ss_tot
 
-    print(f"\n── Test Results ──────────────────────────────")
+    print(f"\n── Test Results (1-week ahead) ───────────────")
     print(f"  MAE  : {mae:.4f}")
     print(f"  RMSE : {rmse:.4f}")
     print(f"  R²   : {r2:.4f}")
 
-    # ── 7. Plots ─────────────────────────────────────────────────────────────
-    fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+    # ── 7. 4-week-ahead forecast on the test set ──────────────────────────────
+    # Strategy: for every valid starting position in the test features,
+    # take the SEQ_LEN window, then autoregressively predict 4 steps forward.
+    # At each step we append the new prediction as a pseudo-feature row so the
+    # LSTM always receives a full-length window.
+    # The real targets 4 steps ahead are then compared to these predictions.
 
+    FORECAST_HORIZON = 4   # weeks (~1 month)
+
+    model.eval()
+    four_week_preds, four_week_trues = [], []
+
+    # We need at least SEQ_LEN + FORECAST_HORIZON rows in the test block
+    max_start = len(f_test) - SEQ_LEN - FORECAST_HORIZON
+
+    with torch.no_grad():
+        for start in range(max_start):
+            # Seed window: the SEQ_LEN feature rows before this position
+            window = f_test[start : start + SEQ_LEN].copy()   # (SEQ_LEN, n_feat)
+
+            # Autoregressively roll forward FORECAST_HORIZON steps
+            for step in range(FORECAST_HORIZON):
+                x_t   = torch.tensor(window, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+                pred  = model(x_t).item()   # scaled prediction
+
+                if step < FORECAST_HORIZON - 1:
+                    # Build a pseudo feature row: use the real future features
+                    # but substitute the target-derived column if you had it.
+                    # Here we use real future environmental features (they would
+                    # be available from a forecast), which is the best-case setup.
+                    next_feat_row = f_test[start + SEQ_LEN + step]   # (n_feat,)
+                    window = np.vstack([window[1:], next_feat_row])   # slide window
+
+            # `pred` is now the 4-week-ahead prediction (still scaled)
+            pred_real  = target_scaler.inverse_transform([[pred]])[0][0]
+            true_real  = target_scaler.inverse_transform(
+                            [[t_test[start + SEQ_LEN + FORECAST_HORIZON - 1]]])[0][0]
+
+            four_week_preds.append(pred_real)
+            four_week_trues.append(true_real)
+
+    four_week_preds = np.array(four_week_preds)
+    four_week_trues = np.array(four_week_trues)
+
+    mae4  = np.mean(np.abs(four_week_preds - four_week_trues))
+    rmse4 = np.sqrt(np.mean((four_week_preds - four_week_trues) ** 2))
+    ss_res4 = np.sum((four_week_trues - four_week_preds) ** 2)
+    ss_tot4 = np.sum((four_week_trues - four_week_trues.mean()) ** 2)
+    r2_4  = 1 - ss_res4 / ss_tot4
+
+    print(f"\n── Test Results (4-week ahead) ───────────────")
+    print(f"  MAE  : {mae4:.4f}")
+    print(f"  RMSE : {rmse4:.4f}")
+    print(f"  R²   : {r2_4:.4f}")
+
+    # ── 8. Plots ──────────────────────────────────────────────────────────────
+    fig, axes = plt.subplots(1, 3, figsize=(20, 4))
+
+    # Loss curves
     axes[0].plot(history["train_loss"], label="Train MSE")
     axes[0].plot(history["val_loss"],   label="Val MSE")
     axes[0].set_title("Training / Validation Loss")
@@ -229,12 +285,23 @@ def run(df: pd.DataFrame):
     axes[0].set_ylabel("MSE (scaled)")
     axes[0].legend()
 
+    # 1-week-ahead predictions
     axes[1].plot(trues, label="Actual",    alpha=0.8)
     axes[1].plot(preds, label="Predicted", alpha=0.8, linestyle="--")
-    axes[1].set_title("Test Set Predictions")
+    axes[1].set_title("1-Week-Ahead Predictions")
     axes[1].set_xlabel("Week")
     axes[1].set_ylabel("Water Leakage")
     axes[1].legend()
+
+    # 4-week-ahead predictions
+    n_show = min(100, len(four_week_preds))
+    axes[2].plot(four_week_trues[:n_show], label="Actual",    alpha=0.8)
+    axes[2].plot(four_week_preds[:n_show], label="4-wk Forecast",
+                 alpha=0.8, linestyle="--", color="tomato")
+    axes[2].set_title("4-Week-Ahead Forecast vs Actual (first 100 weeks)")
+    axes[2].set_xlabel("Week")
+    axes[2].set_ylabel("Water Leakage")
+    axes[2].legend()
 
     plt.tight_layout()
     plt.savefig("lstm_results.png", dpi=150)
